@@ -1,0 +1,20 @@
+<use name=FWCore/Framework>
+<use name=FWCore/ParameterSet>
+<use name=FWCore/Utilities>
+<use name=FWCore/ServiceRegistry>
+<use name=FWCore/PluginManager>
+<use name=CondFormats/BeamSpotObjects>
+<use name=CondFormats/DataRecord>
+<use name=boost>
+<use name=rootrflx>
+<use name=CondFormats/L1TObjects>
+<use name=SimTracker/Records>
+
+<use name=root>
+<use name=rootminuit>
+
+<use name=UserCode/PVStudy>
+<library file="*.cc" name=UserCodePVStudyPlugins>
+         <flags EDM_PLUGIN=1>
+</library>
+

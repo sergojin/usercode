@@ -1,0 +1,29 @@
+<use   name="FWCore/Framework"/>
+<use   name="FWCore/PluginManager"/>
+<use   name="FWCore/ParameterSet"/>
+<use   name="PhysicsTools/UtilAlgos"/>
+<use   name="DataFormats/TrackReco"/>
+<use   name="DataFormats/VertexReco"/>
+<use   name="SimDataFormats/Vertex"/>
+<use   name="SimDataFormats/Track"/>
+<use   name="SimDataFormats/GeneratorProducts"/>
+<use   name="SimGeneral/HepPDTRecord"/>
+<use   name="hepmc"/>
+<use   name="root"/>
+<use   name="rootcintex"/>
+<use   name="SimDataFormats/TrackingAnalysis"/>
+<use   name="SimDataFormats/TrackingHit"/>
+<use   name="FWCore/ServiceRegistry"/>
+<use   name="Geometry/Records"/>
+<use   name="Geometry/TrackerGeometryBuilder"/>
+<use   name="MagneticField/Records"/>
+<use   name="TrackingTools/PatternTools"/>
+<use   name="SimTracker/Records"/>
+<use   name="SimTracker/TrackAssociation"/>
+<use   name="TrackingTools/TransientTrack"/>
+<use   name="DataFormats/BeamSpot"/>
+<use   name="RecoVertex/PrimaryVertexProducer"/>
+<use   name="JetMETCorrections/Objects"/>
+<export>
+  <lib   name="1"/>
+</export>
