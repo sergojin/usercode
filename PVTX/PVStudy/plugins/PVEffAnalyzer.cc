@@ -52,6 +52,8 @@ Implementation:
 #include <SimDataFormats/Vertex/interface/SimVertexContainer.h>
 #include <SimDataFormats/Track/interface/SimTrack.h>
 #include <SimDataFormats/Track/interface/SimTrackContainer.h>
+#include <SimDataFormats/TrackingAnalysis/interface/TrackingParticle.h>                                                                               
+#include <SimDataFormats/TrackingHit/interface/PSimHit.h>  
 // TrackingParticle Associators
 #include "SimTracker/TrackAssociation/interface/TrackAssociatorByHits.h"
 #include "SimTracker/TrackerHitAssociation/interface/TrackerHitAssociator.h"
@@ -64,6 +66,9 @@ Implementation:
 #include "TrackingTools/Records/interface/TransientTrackRecord.h"
 #include "TrackingTools/TransientTrack/interface/TransientTrack.h"
 #include "MagneticField/Records/interface/IdealMagneticFieldRecord.h" 
+
+#include "DataFormats/TrackReco/interface/Track.h"
+#include "DataFormats/TrackReco/interface/TrackFwd.h"
 
 //root
 #include <TROOT.h>
@@ -83,7 +88,8 @@ typedef math::XYZTLorentzVectorF LorentzVector;
 typedef math::XYZPoint Point;
 
 PVEffAnalyzer::PVEffAnalyzer(const edm::ParameterSet& iConfig)
-  :theTrackClusterizer(iConfig.getParameter<edm::ParameterSet>("TkClusParameters")),
+  :theTrackClusterizer(iConfig.getParameter<edm::ParameterSet>("TkClusParameters").getParameter<edm::ParameterSet>("TkDAClusParameters")),
+   assocTags_(iConfig.getUntrackedParameter<edm::InputTag>("associator")),
    theTrackFilter(iConfig.getParameter<edm::ParameterSet>("TkFilterParameters"))
 {
   //=======================================================================
@@ -356,10 +362,12 @@ PVEffAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
   using namespace edm;
   using namespace reco;
 
+
+
   edm::ESHandle<TransientTrackBuilder> theB;
   iSetup.get<TransientTrackRecord>().get("TransientTrackBuilder",theB); 
 
-  //========================================================================
+   //========================================================================
   // Step 0: Prepare root variables and get information from the Event
   //========================================================================
   
@@ -416,6 +424,38 @@ PVEffAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
   const Point beamSpot = recoBeamSpotHandle.isValid() ? Point(recoBeamSpotHandle->x0(), recoBeamSpotHandle->y0(), recoBeamSpotHandle->z0()) : Point(0, 0, 0);
   
   edm::LogInfo("Debug")<<"[PVEffAnalyzer] End accessing the track, beamSpot, primary vertex collections"<<endl;
+
+
+  //== Start of analyzing efficiency for the no-PU MC ( method2)
+  /*
+  int ntracks=0;
+  float dxy=0.0;
+  float dxyError=0.0;
+
+  for(unsigned int i = 0; i < trackCollectionHandle->size(); i++ ) {
+    edm::RefToBase<reco::Track> track(trackCollectionHandle, i);   
+    dxy=track->dxy();
+    dxyError=track->dxyError();
+    if ( 
+      (track->pt() > ptcut_) && 
+      (dxy/dxyError < 5.0) &&
+      (track->normalizedChi2() < 20.0) &&
+      (track->hitPattern().pixelLayersWithMeasurement() >= 2 ) &&
+      (track->hitPattern().trackerLayersWithMeasurement() >= 5 ) 
+      )
+      ntracks++;
+  }
+
+ 
+  h_summary->Fill1d("eff_method2_denom_ntrack",ntracks);
+  if (!((vertexColl->size()==1)&&(vertexColl->begin()->isFake())&&(vertexColl->begin()->ndof()==0)))
+    h_summary->Fill1d("eff_method2_numer_ntrack",ntracks);
+
+  */
+  // == End of Efficiency Analyzing using method2
+  
+
+  
   
   // ========== MC simvtx accessor
   if (!realData_) {
@@ -444,13 +484,19 @@ PVEffAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
     iEvent.getByLabel("generator",evtMC);
 
     edm::Handle<TrackingParticleCollection>  TPCollectionH ;
-    bool gotTP=iEvent.getByLabel("mergedtruth","MergedTrackTruth",TPCollectionH);
+    bool gotTP;//= iEvent.getByLabel("mergedtruth","MergedTrackTruth",TPCollectionH);
+    //    const TrackingParticleCollection tPC   = *(TPCollectionH.product());
 
-    edm::Handle<TrackingVertexCollection>    TVCollectionH ;
-    bool gotTV=iEvent.getByLabel("mergedtruth","MergedTrackTruth",TVCollectionH);
+    edm::Handle<TrackingVertexCollection>  TVCollectionH ;
+    bool gotTV;// = iEvent.getByLabel("mergedtruth","MergedTrackTruth",TVCollectionH);
+    //    const TrackingVertexCollection tVC   = *(TVCollectionH.product());
+
+    gotTP=false;
+    gotTV=false;
 
     std::vector<simPrimaryVertex> simpv;
     
+
     if(gotTV){
       MC=true;
       if(verbose_){
@@ -467,14 +513,17 @@ PVEffAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
     }
    
 
-    if(MC){
+    if (MC) {
+
+
       TString suffix = "_mct";
       // make a list of primary vertices:
+      simpv=getSimPVs(evtMC,"", ptcut_);
+      
       h_gen->Fill1d("nsimPV", simpv.size());
       
-      int isimpv = 0;
       nsimPV_ = simpv.size();
-   
+      
       for(int isimpv = 0; isimpv<int(simpv.size());isimpv++) {
 	simPrimaryVertex vsim = simpv.at(isimpv);
 	nsimTrkPV_[isimpv]  =vsim.nGenTrk;
@@ -490,8 +539,10 @@ PVEffAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
       }
       
       // Just analyze the first vertex in the collection 
-      simPrimaryVertex vsim = *simpv.begin();
+
       int ntracks(0);
+      simPrimaryVertex vsim = *simpv.begin();
+	
       if( useTP_ )
 	ntracks = vsim.nGenTrk;
       else {
@@ -501,8 +552,7 @@ PVEffAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
 	  edm::Handle<TrackingParticleCollection>  TPCollectionHandle ;
 	  iEvent.getByLabel("mergedtruth","MergedTrackTruth",TPCollectionHandle);
 	  // get associators
-	  edm::ESHandle<TrackAssociatorBase> theAssociator;
-	  iSetup.get<TrackAssociatorRecord>().get("TrackAssociatorByHitsRecoDenom",theAssociator);
+	  iSetup.get<TrackAssociatorRecord>().get(assocTags_.label(),theAssociator);
 	  recSimColl = (theAssociator.product())->associateRecoToSim( trackCollectionHandle,
 								    TPCollectionHandle,
 								    & iEvent);
@@ -510,6 +560,7 @@ PVEffAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
 
 	// == use the nubmer of tracks that are filtered and clusterized
 	// copy code from CMSSW/RecoVertex/PrimaryVertexProducer/src/PrimaryVertexProducerAlgorithm.cc
+
 	std::vector<reco::TransientTrack> seltks;
 	for(unsigned int i=0; i<trackCollectionHandle->size(); ++i){ 
 	  edm::RefToBase<reco::Track> track(trackCollectionHandle, i);
@@ -535,22 +586,57 @@ PVEffAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
 	      ntracks++;
 	  }
 	}
-      } // == end of getting the ntracks
+      } // == end of getting the ntracks 
       
-      // == Fill Efficiency Histogram
+      
+    
+
+      if (simpv.size()>0){
+    
+
+      reco::VertexCollection s_empty_matchedVertexColl;
+      reco::VertexCollection *matchedVertexColl = &s_empty_matchedVertexColl; 
+      matchedVertexColl->reserve(vertexColl->size()); 
+
+      float closestZsep=999.9;
+
+      
+
+      //  cout<<"==== New Event ===="<<"\n";
+
+      for( size_t v = 0; v < vertexCollectionHandle->size(); ++v){
+
+	reco::VertexRef recvtx(vertexCollectionHandle, v);
+
+	//cout<< vertexCollectionHandle->size()<<"     "<<recvtx->z() << "\n";
+
+	float zsim=vsim.z;
+	float zreco =recvtx->z();
+
+	if ( fabs(zsim-zreco) < closestZsep)
+	  {
+	    closestZsep=fabs(zsim-zreco);
+	    matchedVertexColl->insert(matchedVertexColl->begin(),*recvtx);
+	  }
+      }
+
+
       if(ntracks>1) {
+	
 	h_summary->Fill1d(TString("eff_denom_ntrack"+suffix), ntracks);
-	if(!vertexColl->begin()->isFake())
-	  h_summary->Fill1d(TString("deltazSign"+suffix), vsim.z - vertexColl->begin()->z());
-	if ( isAssoVertex(vsim, *vertexColl->begin(), zsigncut_)  )
+	//	cout<<vsim.z<<"   "<< matchedVertexColl->begin()->z()<<"   "<<matchedVertexColl->begin()->zError()<<"\n";
+	if(!matchedVertexColl->begin()->isFake())
+	  h_summary->Fill1d(TString("deltazSign"+suffix), vsim.z - matchedVertexColl->begin()->z());
+	if ( isAssoVertex(vsim, *matchedVertexColl->begin(), zsigncut_) )
 	  h_summary->Fill1d(TString("eff_numer_ntrack"+suffix), ntracks);
       }
 
       // == Fill FakeRate Histogram
-      if(!vertexColl->begin()->isFake ()) {
-	h_summary->Fill1d(TString("fakerate_denom_ntrack"+suffix), int(vertexColl->begin()->tracksSize()));
-	if (!isAssoVertex(vsim, *vertexColl->begin(), zsigncut_)  )
-	  h_summary->Fill1d(TString("fakerate_numer_ntrack"+suffix), int(vertexColl->begin()->tracksSize()));
+      if(!matchedVertexColl->begin()->isFake ()) {
+	h_summary->Fill1d(TString("fakerate_denom_ntrack"+suffix), int(matchedVertexColl->begin()->tracksSize()));
+	if (!isAssoVertex(vsim, *matchedVertexColl->begin(), zsigncut_)  )
+	 h_summary->Fill1d(TString("fakerate_numer_ntrack"+suffix), int(matchedVertexColl->begin()->tracksSize()));
+      }
       }
     }  // end of MC analyzing
   } // end of MC access
@@ -572,6 +658,7 @@ PVEffAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
   }
 
   // == End of FakeRate Analyzing
+
   // == Start of Efficiency Analyzing
   std::vector< std::vector<reco::TransientTrack> > clusters1;
   std::vector< std::vector<reco::TransientTrack> > clusters2;
@@ -592,24 +679,80 @@ PVEffAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
     int nGoodTracks = 0;
     for(unsigned int i = 0; i < splitTrackCollection1Handle->size(); i++ ) {
       edm::RefToBase<reco::Track> track(splitTrackCollection1Handle, i);
-      if(track->pt() > ptcut_) // && abs(track->eta()) < 2.5 )
+      if (track->pt() > ptcut_) // && abs(track->eta()) < 2.5 )
 	nGoodTracks++;
     }
     
     h_summary->Fill1d("eff_denom_ntrack", nGoodTracks);
+    
+   
+     
     // ProbeVertex Requirement
     if ( isGoodProbeVertex( *splitVertexColl1->begin(), *vertexColl->begin(), zsigncut_) ) {
+  
       h_summary->Fill1d("eff_numer_ntrack", nGoodTracks);
+
+      //      if ((nGoodTracks >= 2) && (nGoodTracks <= 4)) 
+	
+	{
+
       h_summary->Fill1d("avgWeight_orgvtx_eff",avgWeight(*vertexColl->begin()) );
       h_summary->Fill1d("avgWeight_tagvtx_eff",avgWeight(*splitVertexColl2->begin()) );
       h_summary->Fill1d("avgWeight_probevtx_eff",avgWeight(*splitVertexColl1->begin()) );
+   
+      h_summary->Fill1d("LowestPt_orgvtx_eff",LowestPt(*vertexColl->begin()) );
+      h_summary->Fill1d("LowestPt_tagvtx_eff",LowestPt(*splitVertexColl2->begin()) );
+      h_summary->Fill1d("LowestPt_probevtx_eff",LowestPt(*splitVertexColl1->begin()) );
+      
+      h_summary->Fill1d("LowestWeight_orgvtx_eff",(LowestWeight(*vertexColl->begin())) );
+      h_summary->Fill1d("LowestWeight_tagvtx_eff",(LowestWeight(*splitVertexColl2->begin())) );
+      h_summary->Fill1d("LowestWeight_probevtx_eff",(LowestWeight(*splitVertexColl1->begin())) );
+      
+      h_summary->Fill1d("AveragePt_orgvtx_eff",avgPtRecVtx(*vertexColl->begin()) );
+      h_summary->Fill1d("AveragePt_tagvtx_eff",avgPtRecVtx(*splitVertexColl2->begin()) );
+      h_summary->Fill1d("AveragePt_probevtx_eff",avgPtRecVtx(*splitVertexColl1->begin()) ); 
+
+      h_summary->Fill1d("NZsigma_tagvtx_eff",Zsign(*splitVertexColl2->begin(),*vertexColl->begin()) );
+      h_summary->Fill1d("NZsigma_probevtx_eff",Zsign(*splitVertexColl1->begin(),*vertexColl->begin()) );
+
+      h_summary->Fill1d("Ntrk_orgvtx_eff",(*vertexColl->begin()).tracksSize());
+      h_summary->Fill1d("Ntrk_tagvtx_eff",(*splitVertexColl2->begin()).tracksSize());
+      h_summary->Fill1d("Ntrk_probevtx_eff",(*splitVertexColl1->begin()).tracksSize());
+
+      
+	}
+      
     }
     else
       {
+
 	if (nGoodTracks >= 2) {
+
+	//if ((nGoodTracks >= 2) && (nGoodTracks <= 4)) {
+
 	  h_summary->Fill1d("avgWeight_orgvtx_ineff",avgWeight(*vertexColl->begin()) );
 	  h_summary->Fill1d("avgWeight_tagvtx_ineff",avgWeight(*splitVertexColl2->begin()) );
 	  h_summary->Fill1d("avgWeight_probevtx_ineff",avgWeight(*splitVertexColl1->begin()) );
+	  
+	  h_summary->Fill1d("LowestPt_orgvtx_ineff",LowestPt(*vertexColl->begin()) );
+	  h_summary->Fill1d("LowestPt_tagvtx_ineff",LowestPt(*splitVertexColl2->begin()) );
+	  h_summary->Fill1d("LowestPt_probevtx_ineff",LowestPt(*splitVertexColl1->begin()) );
+	  
+	  h_summary->Fill1d("LowestWeight_orgvtx_ineff",(LowestWeight(*vertexColl->begin())) );
+	  h_summary->Fill1d("LowestWeight_tagvtx_ineff",(LowestWeight(*splitVertexColl2->begin())) );
+	  h_summary->Fill1d("LowestWeight_probevtx_ineff",(LowestWeight(*splitVertexColl1->begin())) );
+	  
+	  h_summary->Fill1d("AveragePt_orgvtx_ineff",avgPtRecVtx(*vertexColl->begin()) );
+	  h_summary->Fill1d("AveragePt_tagvtx_ineff",avgPtRecVtx(*splitVertexColl2->begin()) );
+	  h_summary->Fill1d("AveragePt_probevtx_ineff",avgPtRecVtx(*splitVertexColl1->begin()) ); 
+
+	  h_summary->Fill1d("NZsigma_tagvtx_ineff",Zsign(*splitVertexColl2->begin(),*vertexColl->begin()) );
+	  h_summary->Fill1d("NZsigma_probevtx_ineff",Zsign(*splitVertexColl1->begin(),*vertexColl->begin()) );
+
+	  h_summary->Fill1d("Ntrk_orgvtx_ineff",(*vertexColl->begin()).tracksSize());
+	  h_summary->Fill1d("Ntrk_tagvtx_ineff",(*splitVertexColl2->begin()).tracksSize());
+	  h_summary->Fill1d("Ntrk_probevtx_ineff",(*splitVertexColl1->begin()).tracksSize());
+      
 
 	  std::cout<<"**********Inefficiency Found************** " <<std::endl;
 	  std::cout<<"==== Original Vertex: " <<std::endl;
@@ -630,10 +773,12 @@ PVEffAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
       }
   }
   // == End of Efficiency Analyzing
+ 
   // == Save Ntuple
   if(saventuple_) {
     pvtxtree_->Fill();
   }
+  
 
 }
 
@@ -642,7 +787,7 @@ PVEffAnalyzer::analyze(const edm::Event& iEvent, const edm::EventSetup& iSetup)
 void 
 PVEffAnalyzer::beginJob()
 {
-}
+ }
 
 // ------------ method called once each job just after ending the event loop  ------------
 void 
@@ -783,6 +928,8 @@ bool PVEffAnalyzer::isGoodTagVertex( const reco::Vertex & tag_vtx, const reco::V
     return false;
 }
 
+
+
 // Comparing the probe vertex with the unsplit vertex position in z
 bool PVEffAnalyzer::isGoodProbeVertex( const reco::Vertex & probe_vtx, const reco::Vertex & org_vtx, double & zsign_cut) 
 {
@@ -793,6 +940,13 @@ bool PVEffAnalyzer::isGoodProbeVertex( const reco::Vertex & probe_vtx, const rec
   }
   else
     return false;
+}
+
+
+float PVEffAnalyzer::Zsign( const reco::Vertex & vtx, const reco::Vertex & org_vtx) 
+{
+  float zsign = (vtx.z() - org_vtx.z() ) / TMath::Max(vtx.zError(), org_vtx.zError() );
+  return zsign;
 }
 
 
@@ -881,6 +1035,55 @@ double PVEffAnalyzer::avgWeight(const reco::Vertex & vtx)
     return 0;
   else
     return (vtx.ndof()+3.0)/2.0/double(vtx.tracksSize());
+}
+
+double PVEffAnalyzer::LowestPt(const reco::Vertex & vtx)
+{
+  if(!vtx.isValid() || vtx.isFake() )
+    return 0;
+  else {
+
+    double minPt=999.9;
+    for (reco::Vertex::trackRef_iterator it = vtx.tracks_begin(); it != vtx.tracks_end(); it++) {
+      if (((**it).pt() < minPt )) minPt=(**it).pt();
+    }
+    return minPt;
+  }
+}
+
+
+double PVEffAnalyzer::LowestWeight(const reco::Vertex & vtx)
+{
+  if(!vtx.isValid() || vtx.isFake() )
+    return 0;
+  else {
+
+    double minWeight=999.9;
+    for (reco::Vertex::trackRef_iterator it = vtx.tracks_begin(); it != vtx.tracks_end(); it++) {
+      if (vtx.trackWeight(*it) < minWeight ) minWeight = vtx.trackWeight(*it);
+    }
+    return minWeight;
+  }
+}
+
+
+double PVEffAnalyzer::avgPtRecVtx(const reco::Vertex & vtx)  {
+
+  if(vtx.isFake() || !vtx.isValid() || vtx.tracksSize()==0 ) return 0;
+  else {
+    int nHWTrk = 0;
+    double sumpT = 0.;
+    for (reco::Vertex::trackRef_iterator it = vtx.tracks_begin(); it != vtx.tracks_end(); it++) {
+      if(vtx.trackWeight(*it) > 0.0 ) {
+	sumpT +=  (**it).pt();
+	nHWTrk++;
+      }
+  }
+    if(nHWTrk > 0)
+      return sumpT/double(nHWTrk);
+    else 
+      return 0;
+  }
 }
 
 

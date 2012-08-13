@@ -38,6 +38,10 @@
 #include "DataFormats/TrackReco/interface/TrackFwd.h"
 #include "UserCode/PVStudy/interface/PVEffHistograms.h"
 
+#include "SimTracker/Records/interface/TrackAssociatorRecord.h"
+#include "SimTracker/TrackAssociation/interface/TrackAssociatorByChi2.h"
+#include "SimTracker/TrackAssociation/interface/TrackAssociatorByHits.h"
+
 //needed for MessageLogger
 #include "FWCore/MessageLogger/interface/MessageLogger.h"
 
@@ -67,6 +71,11 @@
 #include "SimDataFormats/TrackingAnalysis/interface/TrackingVertex.h"   
 #include "SimGeneral/TrackingAnalysis/interface/TrackingTruthProducer.h"  
 
+#include "SimTracker/TrackAssociation/interface/TrackAssociatorBase.h"                                                                                
+#include "SimDataFormats/TrackingHit/interface/PSimHit.h"                                                                                             
+#include "SimDataFormats/TrackingHit/interface/PSimHitContainer.h" 
+
+
 //Root
 #include <TH1.h>
 #include <TH2.h>
@@ -81,6 +90,7 @@ using namespace edm;
 using namespace std;
 typedef math::XYZTLorentzVectorF LorentzVector;
 typedef math::XYZPoint Point;
+
 
 class PVEffAnalyzer : public edm::EDAnalyzer {
 
@@ -130,10 +140,15 @@ class PVEffAnalyzer : public edm::EDAnalyzer {
   bool isGoodSplitEvent( const reco::Vertex & ); 
   bool isGoodTagVertex( const reco::Vertex &, const reco::Vertex &, double & );
   bool isGoodProbeVertex( const reco::Vertex &, const reco::Vertex &, double & );
+  float Zsign( const reco::Vertex &, const reco::Vertex &);
   bool isAssoVertex(const simPrimaryVertex&, const reco::Vertex &, double & );
   void MakeEff(TH1D* numer, TH1D* denom, TH1D* eff,  //TGraphAsymmErrors* & gr_eff,
 	       const bool rebin, const Float_t n );
   double avgWeight(const reco::Vertex & ); 
+  double LowestPt(const reco::Vertex & ); 
+  double LowestWeight(const reco::Vertex & ); 
+  double avgPtRecVtx(const reco::Vertex & );
+
   void SetVarToZero();  
   
   // ----------member data ---------------------------
@@ -145,6 +160,9 @@ class PVEffAnalyzer : public edm::EDAnalyzer {
   edm::InputTag splitVertexCollection1Tag_;
   edm::InputTag splitVertexCollection2Tag_;
   edm::InputTag bsSrc;
+
+  edm::ESHandle<TrackAssociatorBase> theAssociator;
+  edm::InputTag assocTags_;
 
   std::string outputfilename_;
   TFile* file_;
@@ -174,9 +192,11 @@ class PVEffAnalyzer : public edm::EDAnalyzer {
   int nTrkMin_;
   int nTrkMax_;
   TrackFilterForPVFinding theTrackFilter; 
-  //TrackClusterizerInZ theTrackClusterizer;
+
+    
+  //  TrackClusterizerInZ theTrackClusterizer;
   
-  GapClusterizerInZ theTrackClusterizer;
+  DAClusterizerInZ theTrackClusterizer;
   
   ESHandle < ParticleDataTable > pdt;
 
