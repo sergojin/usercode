@@ -4,6 +4,7 @@ from TrackingTools.TransientTrack.TransientTrackBuilder_cfi import *
 pveffana = cms.EDAnalyzer('PVEffAnalyzer'
                           ,simG4 = cms.InputTag("g4SimHits")
                           ,trackCollection = cms.untracked.InputTag('generalTracks')
+                          ,associator = cms.untracked.InputTag("TrackAssociatorByHits")
                           ,splitTrackCollection1 = cms.untracked.InputTag("VtxTrackSplitterProducer","SplittedTracks1")
                           ,splitTrackCollection2 = cms.untracked.InputTag("VtxTrackSplitterProducer","SplittedTracks2")
                           ,vertexCollection = cms.untracked.InputTag('offlinePrimaryVertices')
@@ -24,14 +25,22 @@ pveffana = cms.EDAnalyzer('PVEffAnalyzer'
                           ,nTrkMax = cms.untracked.int32(999)
                           ,beamSpot = cms.InputTag("offlineBeamSpot")
                           ,TkClusParameters = cms.PSet(
-                                 algorithm   = cms.string('gap'),
-                                 zSeparation = cms.double(1) #release value is 0.1  
-                                )
+                               algorithm   = cms.string("DA"),
+                               TkDAClusParameters = cms.PSet(
+                               coolingFactor = cms.double(0.6),  #  moderate annealing speed
+                               Tmin = cms.double(4.),            #  end of annealing
+                               vertexSize = cms.double(0.01),    #  ~ resolution / sqrt(Tmin)
+                               d0CutOff = cms.double(3.),        # downweight high IP tracks
+                               dzCutOff = cms.double(4.)         # outlier rejection after freeze-out (T<Tmin)
+                               )
+                               )
                           ,TkFilterParameters = cms.PSet(
+                                algorithm=cms.string('filter'),
                                 maxNormalizedChi2 = cms.double(20.0),
-                                maxD0Significance = cms.double(100.0),
-                                minPixelLayersWithHits = cms.int32(2),
-                                minSiliconLayersWithHits = cms.int32(5)
+                                minPixelLayersWithHits=cms.int32(2),
+                                minSiliconLayersWithHits = cms.int32(5),
+                                maxD0Significance = cms.double(5.0), 
+                                minPt = cms.double(0.0),
+                                trackQuality = cms.string("any")
                                 )
                           )
-
