@@ -37,7 +37,7 @@ process.source = cms.Source ("PoolSource",fileNames = readFiles, secondaryFileNa
 #    '/store/data/Run2011A/MinimumBias/AOD/05Aug2011-v1/0000/0846251D-BDC0-E011-A738-00304867900C.root',
 #    '/store/data/Run2011A/MinimumBias/AOD/05Aug2011-v1/0000/064C8E70-98C0-E011-9D82-003048678EE2.root',
 #    '/store/data/Run2011A/MinimumBias/AOD/05Aug2011-v1/0000/06457FA0-B5C0-E011-AA70-001A92971B8E.root'
-#
+
 #        ),
 #    )
 
@@ -70,7 +70,7 @@ process.VertexCountFilter = cms.EDFilter("VertexCountFilter",
 
 process.primaryVertexFilter = cms.EDFilter("VertexSelector",
                                            src = cms.InputTag("offlinePrimaryVertices"),
-                                           cut = cms.string("!isFake && ndof > 0 && abs(z) <= 15 && position.Rho <= 2"),
+                                           cut = cms.string("!isFake && ndof > 0 && abs(z) <= 24 && position.Rho <= 2"),
                                            filter = cms.bool(True),
                                            # otherwise it won't filter the events, just produce an empty vertex collection.
                                            )
@@ -84,8 +84,9 @@ process.GOODCOLL = cms.Sequence(process.VertexCountFilter*(process.primaryVertex
 process.load("UserCode.PVStudy.VtxTrackSplitterProducer_cff")
 process.VtxTrackSplitterProducer.beamSpot = cms.InputTag("offlineBeamSpot")
 process.VtxTrackSplitterProducer.nTrkPerBlock = cms.int32(3) # split 1:2
-#process.VtxTrackSplitterProducer.trackWeightCut = cms.double(0.0)
-
+process.VtxTrackSplitterProducer.trackWeightCut = cms.double(1.0e-09)
+process.VtxTrackSplitterProducer.useHWTrack = cms.bool(False)
+process.VtxTrackSplitterProducer.trackPtCut = cms.double(0.3)
 
 #====================================
 # PVProducer based on SplittedTracks1
@@ -127,4 +128,4 @@ process.options = cms.untracked.PSet( wantSummary = cms.untracked.bool(False),
                                       SkipEvent = cms.untracked.vstring('ProductNotFound')
                                       )
 
-process.allPath=cms.Path(process.GOODCOLL*process.VtxTrackSplitterProducer*(process.PVProducer1+process.PVProducer2)*process.pveffana)
+process.allPath=cms.Path(process.GOODCOLL*process.offlineBeamSpot*process.offlinePrimaryVertices*process.VtxTrackSplitterProducer*(process.PVProducer1+process.PVProducer2)*process.pveffana)
